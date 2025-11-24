@@ -27,25 +27,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Verify required files
         run: |
           echo "🔍 检查必需的配置文件..."
-
           if [ ! -f config/config.yaml ]; then
             echo "❌ 错误: config/config.yaml 文件不存在"
             echo "请参考项目文档创建配置文件"
             exit 1
           fi
-
           if [ ! -f config/frequency_words.txt ]; then
             echo "❌ 错误: config/frequency_words.txt 文件不存在"
             echo "请参考项目文档创建频率词配置文件"
             exit 1
           fi
-
           echo "✅ 配置文件检查通过"
-
       - name: Run crawler
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
@@ -68,7 +63,33 @@ jobs:
 
       - name: Commit and push if changes
         run: |
+          # 配置 Git 身份
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
+          
+          # 暂存所有修改
           git add -A
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update by GitHub Actions at $(TZ=Asia/Shanghai date)" && git push)
+          
+          # 检查是否有未提交的修改（工作区或暂存区）
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "ℹ️  没有需要提交的修改，跳过推送"
+            exit 0
+          fi
+          
+          # 提交修改（使用上海时区时间）
+          COMMIT_MSG="Auto update by GitHub Actions at $(TZ=Asia/Shanghai date)"
+          git commit -m "$COMMIT_MSG"
+          echo "✅ 提交成功：$COMMIT_MSG"
+          
+          # 关键步骤：拉取远程更新（处理冲突）
+          echo "🔄 拉取远程 master 分支更新..."
+          # 先尝试变基拉取（保持提交历史整洁），冲突则自动合并并保留本地修改
+          if ! git pull --rebase origin master; then
+            echo "⚠️  变基拉取失败，尝试强制合并（保留本地修改）..."
+            git pull origin master -X ours
+          fi
+          
+          # 推送修改到远程
+          echo "🚀 推送修改到远程仓库..."
+          git push origin master
+          echo "✅ 推送成功！"
